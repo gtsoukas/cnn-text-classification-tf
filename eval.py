@@ -19,9 +19,10 @@ FLAGS = flags.FLAGS
 # Data Parameters
 flags.DEFINE_string("positive_data_file", "./data/rt-polaritydata/rt-polarity.pos", "Data source for the positive data.")
 flags.DEFINE_string("negative_data_file", "./data/rt-polaritydata/rt-polarity.neg", "Data source for the negative data.")
+flags.DEFINE_string("character_encoding", "utf-8", "Input file encoding.")
 
 # Eval Parameters
-flags.DEFINE_integer("batch_size", 64, "Batch Size (default: 64)")
+flags.DEFINE_integer("batch_size", 64, "Batch Size")
 flags.DEFINE_string("checkpoint_dir", "", "Checkpoint directory from training run")
 flags.DEFINE_boolean("eval_train", False, "Evaluate on all training data")
 
@@ -31,14 +32,16 @@ flags.DEFINE_boolean("log_device_placement", False, "Log placement of ops on dev
 
 
 def main(unused_argv):
-    print("\nParameters:")
-    for k, v in FLAGS.flag_values_dict().items():
-        print("{}={}".format(k.upper(), v))
-    print("")
+    # print("\nParameters:")
+    # for k, v in FLAGS.flag_values_dict().items():
+    #     print("{}={}".format(k.upper(), v))
+    # print("")
 
     # CHANGE THIS: Load data. Load your own data here
     if FLAGS.eval_train:
-        x_raw, y_test = data_helpers.load_data_and_labels(FLAGS.positive_data_file, FLAGS.negative_data_file)
+        x_raw, y_test = data_helpers.load_data_and_labels(
+            FLAGS.positive_data_file, FLAGS.negative_data_file
+            , FLAGS.character_encoding)
         y_test = np.argmax(y_test, axis=1)
     else:
         x_raw = ["a masterpiece four years in the making", "everything is off."]
