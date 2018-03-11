@@ -6,6 +6,7 @@ import os
 import time
 import datetime
 import data_helpers
+from gensim.models import FastText
 from text_cnn import TextCNN
 from tensorflow.contrib import learn
 
@@ -15,13 +16,17 @@ from tensorflow.contrib import learn
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-# Data loading params
+# Data loading parameters
 flags.DEFINE_float("dev_sample_percentage", .1, "Percentage of the training data to use for validation")
 flags.DEFINE_string("positive_data_file", "./data/rt-polaritydata/rt-polarity.pos", "Data source for the positive data")
 flags.DEFINE_string("negative_data_file", "./data/rt-polaritydata/rt-polarity.neg", "Data source for the negative data")
 flags.DEFINE_string("character_encoding", "utf-8", "Input file encoding.")
 
-# Model Hyperparameters
+# Pretrained embeddings paramameters
+flags.DEFINE_string("word2vec", None, "Word2vec file with pre-trained embeddings")
+flags.DEFINE_string("fasttext", None, "fastText file with pre-trained embeddings")
+
+# Model hyperparameters
 flags.DEFINE_integer("embedding_dim", 128, "Dimensionality of character embedding")
 flags.DEFINE_string("filter_sizes", "3,4,5", "Comma-separated filter sizes")
 flags.DEFINE_integer("num_filters", 128, "Number of filters per filter size")
@@ -35,7 +40,7 @@ flags.DEFINE_integer("evaluate_every", 100, "Evaluate model on dev set after thi
 flags.DEFINE_integer("checkpoint_every", 100, "Save model after this many steps")
 flags.DEFINE_integer("num_checkpoints", 5, "Number of checkpoints to store")
 
-# Misc Parameters
+# Misc parameters
 flags.DEFINE_boolean("allow_soft_placement", True, "Allow device soft device placement")
 flags.DEFINE_boolean("log_device_placement", False, "Log placement of ops on devices")
 
@@ -142,6 +147,56 @@ def main(unused_argv):
 
             # Initialize all variables
             sess.run(tf.global_variables_initializer())
+
+            if FLAGS.word2vec:
+                initW = np.random.uniform(-0.25, 0.25, (len(vocab_processor.vocabulary_), FLAGS.embedding_dim))
+                print("Loading word2vec file {}\n".format(FLAGS.word2vec))
+                with open(FLAGS.word2vec, "rb") as f:
+                    header = f.readline()
+                    emb_vocab_size, layer1_size = map(int, header.split())
+                    assert layer1_size == FLAGS.embedding_dim
+                    binary_len = np.dtype('float32').itemsize * layer1_size
+                    coverage = 0
+                    for line in range(emb_vocab_size):
+                        word = []
+                        while True:
+                            ch = f.read(1)
+                            if ch == b' ':
+                                break
+                            if ch != b'\n':
+                                word.append(ch)
+                        word = str(b''.join(word), encoding='utf-8', errors='strict')
+                        idx = vocab_processor.vocabulary_.get(word)
+                        if idx != 0:
+                            initW[idx] = np.fromstring(f.read(binary_len), dtype='float32')
+                            coverage += 1
+                        else:
+                            f.seek(binary_len, 1)
+                        if(line % 10000 == 0 or line == (emb_vocab_size-1)):
+                            print('word2vec read progress: {0:.2%}, coverage: {1:.2%}'\
+                                .format(1. * line / emb_vocab_size, 1. * coverage / vocabulary_size))
+                sess.run(cnn.W.assign(initW))
+
+            if FLAGS.fasttext:
+                initW = np.random.uniform(-0.25, 0.25, (len(vocab_processor.vocabulary_), FLAGS.embedding_dim))
+                print("Loading fasttext file {}\n".format(FLAGS.fasttext))
+                ftm = FastText.load_fasttext_format(model_file=FLAGS.fasttext, encoding="utf-8")
+                assert FLAGS.embedding_dim == ftm.wv.vector_size
+                vocab_dict = vocab_processor.vocabulary_._mapping
+                sorted_vocab = sorted(vocab_dict.items(), key = lambda x : x[1])
+                coverage = 0
+                t_cnt = 0
+                for t, idx in sorted_vocab:
+                    t_cnt += 1
+                    if t.lower() in ftm.wv.vocab and t != u'<UNK>':
+                        v = ftm[t.lower()]
+                        assert v.dtype == 'float32'
+                        initW[idx] = v
+                        coverage += 1
+                    if(t_cnt % 10000 == 0 or t_cnt == (vocabulary_size - 1)):
+                        print('fasttext embedding lookup progress: {0:.2%}, coverage: {1:.2%}'\
+                            .format(1. * t_cnt / vocabulary_size, 1. * coverage / vocabulary_size))
+                sess.run(cnn.W.assign(initW))
 
             def train_step(x_batch, y_batch):
                 """
