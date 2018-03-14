@@ -40,8 +40,6 @@ flags.DEFINE_float("l2_reg_lambda", 0.0, "L2 regularization lambda")
 flags.DEFINE_integer("batch_size", 64, "Batch Size")
 flags.DEFINE_integer("num_epochs", 25, "Number of training epochs")
 flags.DEFINE_integer("evaluate_every", 100, "Evaluate model on dev set after this many steps")
-flags.DEFINE_integer("checkpoint_every", 100, "Save model after this many steps")
-flags.DEFINE_integer("num_checkpoints", 5, "Number of checkpoints to store")
 
 # Misc parameters
 flags.DEFINE_boolean("allow_soft_placement", True, "Allow device soft device placement")
@@ -141,11 +139,11 @@ def main(unused_argv):
             dev_summary_writer = tf.summary.FileWriter(dev_summary_dir, sess.graph)
 
             # Checkpoint directory. Tensorflow assumes this directory already exists so we need to create it
-            checkpoint_dir = os.path.abspath(os.path.join(out_dir, "checkpoints"))
+            checkpoint_dir = os.path.abspath(os.path.join(out_dir, "best-model"))
             checkpoint_prefix = os.path.join(checkpoint_dir, "model")
             if not os.path.exists(checkpoint_dir):
                 os.makedirs(checkpoint_dir)
-            saver = tf.train.Saver(tf.global_variables(), max_to_keep=FLAGS.num_checkpoints)
+            saver = tf.train.Saver(tf.global_variables(), max_to_keep=1)
 
             # Write vocabulary
             vocab_processor.save(os.path.join(out_dir, "vocab"))
@@ -266,22 +264,25 @@ def main(unused_argv):
                 print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, loss, accuracy))
                 if writer:
                     writer.add_summary(summaries, step)
+                return accuracy
 
             # Generate batches
             batches = data_helpers.batch_iter(
                 list(zip(x_train, y_train)), FLAGS.batch_size, FLAGS.num_epochs)
             # Training loop. For each batch...
+            best_perf = -1.0 # larger is better
             for batch in batches:
                 x_batch, y_batch = zip(*batch)
                 train_step(x_batch, y_batch)
                 current_step = tf.train.global_step(sess, global_step)
                 if current_step % FLAGS.evaluate_every == 0:
                     print("\nEvaluation:")
-                    dev_step(x_dev, y_dev, writer=dev_summary_writer)
+                    acc = dev_step(x_dev, y_dev, writer=dev_summary_writer)
                     print("")
-                if current_step % FLAGS.checkpoint_every == 0:
-                    path = saver.save(sess, checkpoint_prefix, global_step=current_step)
-                    print("Saved model checkpoint to {}\n".format(path))
+                    if acc > best_perf:
+                        best_perf = acc
+                        path = saver.save(sess, checkpoint_prefix, global_step=current_step)
+                        print("Saved model to {}\n".format(path))
 
 
 if __name__ == '__main__':
