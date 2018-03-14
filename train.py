@@ -46,6 +46,7 @@ flags.DEFINE_integer("num_checkpoints", 5, "Number of checkpoints to store")
 # Misc parameters
 flags.DEFINE_boolean("allow_soft_placement", True, "Allow device soft device placement")
 flags.DEFINE_boolean("log_device_placement", False, "Log placement of ops on devices")
+flags.DEFINE_string("logs_subfolder", "", "Subfolder within 'runs'-folder")
 
 
 def main(unused_argv):
@@ -122,7 +123,7 @@ def main(unused_argv):
 
             # Output directory for models and summaries
             timestamp = str(int(time.time()))
-            out_dir = os.path.abspath(os.path.join(os.path.curdir, "runs", timestamp))
+            out_dir = os.path.abspath(os.path.join(os.path.curdir, "runs", FLAGS.logs_subfolder, timestamp))
             print("Writing to {}\n".format(out_dir))
 
             # Summaries for loss and accuracy
