@@ -5,6 +5,7 @@ import numpy as np
 import os
 import time
 import datetime
+import re
 import data_helpers
 from gensim.models import FastText
 from text_cnn import TextCNN
@@ -25,6 +26,8 @@ flags.DEFINE_string("character_encoding", "utf-8", "Input file encoding.")
 # Pretrained embeddings paramameters
 flags.DEFINE_string("word2vec", None, "Word2vec file with pre-trained embeddings")
 flags.DEFINE_string("fasttext", None, "fastText file with pre-trained embeddings")
+flags.DEFINE_string("conceptnet_numberbatch", None, "conceptnet-numberbatch file with pre-trained embeddings")
+flags.DEFINE_string("conceptnet_numberbatch_lang_filter", "\w*", "conceptnet-numberbatch language filter regular expression")
 
 # Model hyperparameters
 flags.DEFINE_integer("embedding_dim", 128, "Dimensionality of character embedding")
@@ -78,7 +81,8 @@ def main(unused_argv):
 
     del x, y, x_shuffled, y_shuffled
 
-    print("Vocabulary Size: {:d}".format(len(vocab_processor.vocabulary_)))
+    vocabulary_size = len(vocab_processor.vocabulary_)
+    print("Vocabulary Size: {:d}".format(vocabulary_size))
     print("Train/Dev split: {:d}/{:d}".format(len(y_train), len(y_dev)))
 
 
@@ -150,7 +154,7 @@ def main(unused_argv):
 
             if FLAGS.word2vec:
                 initW = np.random.uniform(-0.25, 0.25, (len(vocab_processor.vocabulary_), FLAGS.embedding_dim))
-                print("Loading word2vec file {}\n".format(FLAGS.word2vec))
+                print("Loading word2vec embeddings file {}\n".format(FLAGS.word2vec))
                 with open(FLAGS.word2vec, "rb") as f:
                     header = f.readline()
                     emb_vocab_size, layer1_size = map(int, header.split())
@@ -173,13 +177,13 @@ def main(unused_argv):
                         else:
                             f.seek(binary_len, 1)
                         if(line % 10000 == 0 or line == (emb_vocab_size-1)):
-                            print('word2vec read progress: {0:.2%}, coverage: {1:.2%}'\
+                            print('Embeddings scan progress: {0:.2%}, coverage: {1:.2%}'\
                                 .format(1. * line / emb_vocab_size, 1. * coverage / vocabulary_size))
                 sess.run(cnn.W.assign(initW))
 
             if FLAGS.fasttext:
                 initW = np.random.uniform(-0.25, 0.25, (len(vocab_processor.vocabulary_), FLAGS.embedding_dim))
-                print("Loading fasttext file {}\n".format(FLAGS.fasttext))
+                print("Loading fasttext embeddings file {}\n".format(FLAGS.fasttext))
                 ftm = FastText.load_fasttext_format(model_file=FLAGS.fasttext, encoding="utf-8")
                 assert FLAGS.embedding_dim == ftm.wv.vector_size
                 vocab_dict = vocab_processor.vocabulary_._mapping
@@ -194,8 +198,39 @@ def main(unused_argv):
                         initW[idx] = v
                         coverage += 1
                     if(t_cnt % 10000 == 0 or t_cnt == (vocabulary_size - 1)):
-                        print('fasttext embedding lookup progress: {0:.2%}, coverage: {1:.2%}'\
+                        print('Embeddings file scan progress: {0:.2%}, coverage: {1:.2%}'\
                             .format(1. * t_cnt / vocabulary_size, 1. * coverage / vocabulary_size))
+                sess.run(cnn.W.assign(initW))
+
+            if FLAGS.conceptnet_numberbatch:
+                initW = np.random.normal(0, 0.06, (len(vocab_processor.vocabulary_), FLAGS.embedding_dim))
+                print("Loading conceptnet_numberbatch embeddings file {}\n".format(FLAGS.conceptnet_numberbatch))
+                with open(FLAGS.conceptnet_numberbatch, "r", encoding=FLAGS.character_encoding) as f:
+                    header = f.readline()
+                    emb_vocab_size, layer1_size = map(int, header.split())
+                    assert  FLAGS.embedding_dim == layer1_size
+                    coverage = 0
+                    lang_stats = dict()
+                    for i in range(emb_vocab_size):
+                        line = f.readline()
+                        word_search = re.search(r'/c/('+ FLAGS.conceptnet_numberbatch_lang_filter + ')/(\w*)\s(.*)', line)
+                        if word_search:
+                            lang = word_search.group(1)
+                            word = word_search.group(2)
+                            vector = np.fromstring(word_search.group(3), dtype='float32', sep=u' ')
+                            idx = vocab_processor.vocabulary_.get(word)
+                            if idx != 0:
+                                initW[idx] = vector
+                                coverage += 1
+                                # print("lang: {}, word: {}".format(lang, word))
+                                if lang in lang_stats:
+                                    lang_stats[lang] += 1
+                                else:
+                                    lang_stats[lang] = 1
+                            if(i % 10000 == 0 or i == (emb_vocab_size-1)):
+                                print('Embeddings scan progress: {0:.2%}, coverage: {1:.2%}'\
+                                    .format(1. * i / emb_vocab_size, 1. * coverage / vocabulary_size))
+                    print(lang_stats)
                 sess.run(cnn.W.assign(initW))
 
             def train_step(x_batch, y_batch):
