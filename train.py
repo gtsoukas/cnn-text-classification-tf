@@ -42,7 +42,7 @@ flags.DEFINE_integer("num_epochs", 25, "Number of training epochs")
 flags.DEFINE_integer("evaluate_every", 100, "Evaluate model on dev set after this many steps")
 
 # Misc parameters
-flags.DEFINE_boolean("allow_soft_placement", True, "Allow device soft device placement")
+flags.DEFINE_boolean("allow_soft_placement", True, "Allow soft device placement")
 flags.DEFINE_boolean("log_device_placement", False, "Log placement of ops on devices")
 flags.DEFINE_string("logs_subfolder", "", "Subfolder within 'runs'-folder")
 
