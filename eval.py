@@ -19,7 +19,7 @@ FLAGS = flags.FLAGS
 # Data Parameters
 flags.DEFINE_string("positive_data_file", "./data/rt-polaritydata/rt-polarity.pos", "Data source for the positive data.")
 flags.DEFINE_string("negative_data_file", "./data/rt-polaritydata/rt-polarity.neg", "Data source for the negative data.")
-flags.DEFINE_string("character_encoding", "utf-8", "Input file encoding.")
+flags.DEFINE_string("character_encoding", "utf-8", "Input/output file encoding.")
 
 # Eval Parameters
 flags.DEFINE_integer("batch_size", 64, "Batch Size")
@@ -88,7 +88,7 @@ def main(unused_argv):
     predictions_human_readable = np.column_stack((np.array(x_raw), all_predictions))
     out_path = os.path.join(FLAGS.checkpoint_dir, "..", "prediction.csv")
     print("Saving evaluation to {0}".format(out_path))
-    with open(out_path, 'w') as f:
+    with open(out_path, 'w', encoding=FLAGS.character_encoding) as f:
         csv.writer(f).writerows(predictions_human_readable)
 
 if __name__ == '__main__':
