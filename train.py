@@ -97,7 +97,7 @@ def main(unused_argv):
             cnn = TextCNN(
                 sequence_length=x_train.shape[1],
                 num_classes=y_train.shape[1],
-                vocab_size=len(vocab_processor.vocabulary_),
+                vocab_size=vocabulary_size,
                 embedding_size=FLAGS.embedding_dim,
                 filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
                 num_filters=FLAGS.num_filters,
@@ -147,12 +147,17 @@ def main(unused_argv):
 
             # Write vocabulary
             vocab_processor.save(os.path.join(out_dir, "vocab"))
+            vocab_dict = vocab_processor.vocabulary_._mapping
+            sorted_vocab = sorted(vocab_dict.items(), key = lambda x : x[1])
+            with open(os.path.join(out_dir, "vocab.txt"), "w", encoding=FLAGS.character_encoding) as f:
+              for i in sorted_vocab:
+                f.write("%s\n" % i[0])
 
             # Initialize all variables
             sess.run(tf.global_variables_initializer())
 
             if FLAGS.word2vec:
-                initW = np.random.uniform(-0.25, 0.25, (len(vocab_processor.vocabulary_), FLAGS.embedding_dim))
+                initW = np.random.uniform(-0.25, 0.25, (vocabulary_size, FLAGS.embedding_dim))
                 print("Loading word2vec embeddings file {}\n".format(FLAGS.word2vec))
                 with open(FLAGS.word2vec, "rb") as f:
                     header = f.readline()
@@ -181,7 +186,7 @@ def main(unused_argv):
                 sess.run(cnn.W.assign(initW))
 
             if FLAGS.fasttext:
-                initW = np.random.uniform(-0.25, 0.25, (len(vocab_processor.vocabulary_), FLAGS.embedding_dim))
+                initW = np.random.uniform(-0.25, 0.25, (vocabulary_size, FLAGS.embedding_dim))
                 print("Loading fasttext embeddings file {}\n".format(FLAGS.fasttext))
                 ftm = FastText.load_fasttext_format(model_file=FLAGS.fasttext, encoding="utf-8")
                 assert FLAGS.embedding_dim == ftm.wv.vector_size
@@ -202,7 +207,7 @@ def main(unused_argv):
                 sess.run(cnn.W.assign(initW))
 
             if FLAGS.conceptnet_numberbatch:
-                initW = np.random.normal(0, 0.06, (len(vocab_processor.vocabulary_), FLAGS.embedding_dim))
+                initW = np.random.normal(0, 0.06, (vocabulary_size, FLAGS.embedding_dim))
                 print("Loading conceptnet_numberbatch embeddings file {}\n".format(FLAGS.conceptnet_numberbatch))
                 with open(FLAGS.conceptnet_numberbatch, "r", encoding=FLAGS.character_encoding) as f:
                     header = f.readline()
