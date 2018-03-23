@@ -36,6 +36,8 @@ def main(unused_argv):
     #     print("{}={}".format(k.upper(), v))
     # print("")
 
+    assert FLAGS.checkpoint_dir != ""
+
     x_raw, y_test = data_helpers.load_data_and_labels(
         FLAGS.positive_data_file, FLAGS.negative_data_file
         , FLAGS.character_encoding)
@@ -66,17 +68,30 @@ def main(unused_argv):
             dropout_keep_prob = graph.get_operation_by_name("dropout_keep_prob").outputs[0]
 
             # Tensors we want to evaluate
+            scores = graph.get_operation_by_name("output/scores").outputs[0]
             predictions = graph.get_operation_by_name("output/predictions").outputs[0]
 
             # Generate batches for one epoch
             batches = data_helpers.batch_iter(list(x_test), FLAGS.batch_size, 1, shuffle=False)
 
             # Collect the predictions here
-            all_predictions = []
-
+            n = len(y_test)
+            all_scores = np.empty([n, 2])
+            all_predictions = np.empty([n])
+            i = 0
             for x_test_batch in batches:
-                batch_predictions = sess.run(predictions, {input_x: x_test_batch, dropout_keep_prob: 1.0})
-                all_predictions = np.concatenate([all_predictions, batch_predictions])
+                s, p = sess.run([scores, predictions], {input_x: x_test_batch, dropout_keep_prob: 1.0})
+                ii = s.shape[0]
+                all_scores[i:(i+ii),:] = s
+                all_predictions[i:(i+ii)] = p
+                i += ii
+
+            # all_scores = np.empty([0, 2])
+            # all_predictions = []
+            # for x_test_batch in batches:
+            #     s, p = sess.run([scores, predictions], {input_x: x_test_batch, dropout_keep_prob: 1.0})
+            #     all_scores = np.concatenate((all_scores, s), axis=0)
+            #     all_predictions = np.concatenate([all_predictions, p])
 
     # Print accuracy if y_test is defined
     if y_test is not None:
@@ -85,9 +100,9 @@ def main(unused_argv):
         print("Accuracy: {:g}".format(correct_predictions/float(len(y_test))))
 
     # Save the evaluation to a csv
-    predictions_human_readable = np.column_stack((np.array(x_raw), all_predictions))
+    predictions_human_readable = np.column_stack((np.array(x_raw), all_predictions, all_scores))
     out_path = os.path.join(FLAGS.checkpoint_dir, "..", "prediction.csv")
-    print("Saving evaluation to {0}".format(out_path))
+    print("Saving predictions and scores to {0}".format(out_path))
     with open(out_path, 'w', encoding=FLAGS.character_encoding) as f:
         csv.writer(f).writerows(predictions_human_readable)
 
